@@ -8,7 +8,7 @@ from telethon.errors import (
 )
 from telethon import functions
 import random
-
+from telethon.tl import types
 
 CONFIG_FILE = "wind_inf.json"
 
@@ -94,18 +94,40 @@ def users_maker(users_file):
 
 async def watch_user_story(client, name, user):
     try:
+        # Получаем список историй
         result = await client(functions.stories.GetPeerStoriesRequest(peer=user))
 
-        stories = getattr(result, "stories", None)
-        if not stories:
-            print(f"{Fore.WHITE}[SUCCESS]{Fore.RESET} Аккаунт: {Fore.WHITE} {name} {Fore.RESET} у пользователя {Fore.WHITE} @{user} нет активных историй")
+        # Извлекаем список сторис
+        peer_stories = result.stories
+        stories_list = getattr(peer_stories, "stories", None)
+
+        if not stories_list:
+            print(f"{Fore.WHITE}[SUCCESS]{Fore.RESET} Аккаунт: {Fore.WHITE}{name}{Fore.RESET} — у пользователя {Fore.WHITE}{user}{Fore.RESET} нет активных историй")
             return False
-        print(f"{Fore.GREEN} [SUCCESS] {Fore.RESET} Аккаунт: {Fore.GREEN} {name} {Fore.RESET} история пользователя {Fore.LIGHTBLUE_EX }@{user} {Fore.RESET} успешно просмоторена")
+
+        latest = stories_list[-1]
+
+        # Отправляем реакцию 👀, чтобы Telegram засчитал просмотр
+        from telethon.tl import types
+        await client(functions.stories.SendReactionRequest(
+            peer=user,
+            story_id=latest.id,
+            reaction=types.ReactionEmoji(emoticon="👀"),
+            add_to_recent=False
+        ))
+
+        print(f"{Fore.GREEN}[SUCCESS]{Fore.RESET} Аккаунт: {Fore.GREEN}{name}{Fore.RESET} просмотрел историю пользователя {Fore.LIGHTBLUE_EX}@{user}{Fore.RESET}")
+        return True
+
     except FloodWaitError as e:
-        print(f"{Fore.YELLOW} [FLOOD] {Fore.RESET} Аккаунт: {Fore.YELLOW}{name}{Fore.RESET} Флуд. Ожидание: {Fore.YELLOW}{e.seconds}{Fore.RESET} секунд...")
+        print(f"{Fore.YELLOW}[FLOOD]{Fore.RESET} Аккаунт: {Fore.YELLOW}{name}{Fore.RESET} — ожидание {e.seconds} секунд...")
         await asyncio.sleep(e.seconds)
+        return await watch_user_story(client, name, user)
+
     except Exception as e:
-        print(f"{Fore.LIGHTRED_EX} [ERROR] {Fore.RESET} Аккаунт: {Fore.LIGHTRED_EX} {name} {Fore.RESET} Ощибка при просмотре истории: {Fore.LIGHTRED_EX} {e}")
+        print(f"{Fore.LIGHTRED_EX}[ERROR]{Fore.RESET} Аккаунт: {Fore.LIGHTRED_EX}{name}{Fore.RESET} Ошибка при просмотре @{user}: {Fore.LIGHTRED_EX}{e}")
+        return False
+
 
 
 async def users_proceed(client, name, users_list):
