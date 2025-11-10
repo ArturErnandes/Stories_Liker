@@ -8,7 +8,6 @@ from telethon.errors import (
 )
 from telethon import functions
 import random
-from telethon.tl import types
 
 CONFIG_FILE = "wind_inf.json"
 
