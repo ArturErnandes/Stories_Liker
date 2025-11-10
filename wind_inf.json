@@ -1,0 +1,12 @@
+{
+    "numbers": [],
+    "bio": "",
+    "channels_message": "",
+    "proxy": {
+        "type": "socks5",
+        "host": "",
+        "port": ,
+        "username": "",
+        "password": ""
+    }
+}
