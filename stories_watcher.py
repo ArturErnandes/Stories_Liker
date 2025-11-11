@@ -115,7 +115,7 @@ async def watch_user_story(client, name, user):
             add_to_recent=False
         ))
 
-        print(f"{Fore.GREEN}[SUCCESS]{Fore.RESET} Аккаунт: {Fore.GREEN}{name}{Fore.RESET} просмотрел историю пользователя {Fore.LIGHTBLUE_EX}@{user}{Fore.RESET}")
+        print(f"{Fore.GREEN}[SUCCESS]{Fore.RESET} Аккаунт: {Fore.GREEN}{name}{Fore.RESET} просмотрел историю пользователя {Fore.LIGHTBLUE_EX}{user}{Fore.RESET}")
         return True
 
     except FloodWaitError as e:
@@ -124,13 +124,13 @@ async def watch_user_story(client, name, user):
         return await watch_user_story(client, name, user)
 
     except Exception as e:
-        print(f"{Fore.LIGHTRED_EX}[ERROR]{Fore.RESET} Аккаунт: {Fore.LIGHTRED_EX}{name}{Fore.RESET} Ошибка при просмотре @{user}: {Fore.LIGHTRED_EX}{e}")
+        print(f"{Fore.LIGHTRED_EX}[ERROR]{Fore.RESET} Аккаунт: {Fore.LIGHTRED_EX}{name}{Fore.RESET} Ошибка при просмотре {user}: {Fore.LIGHTRED_EX}{e}")
         return False
 
 
 
 async def users_proceed(client, name, users_list):
-    print(f"{Fore.GREEN}[PROCEEDING...]{Fore.RESET} Аккаунт: {Fore.GREEN}{name}")
+    print(f"{Fore.WHITE}[PROCEEDING...]{Fore.RESET} Аккаунт: {Fore.WHITE}{name}")
     print(f"Пользователей для обработки: {Fore.LIGHTBLUE_EX} {len(users_list)}")
 
     for user in users_list:
