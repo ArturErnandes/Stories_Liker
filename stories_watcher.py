@@ -111,7 +111,7 @@ async def watch_user_story(client, name, user):
         await client(functions.stories.SendReactionRequest(
             peer=user,
             story_id=latest.id,
-            reaction=types.ReactionEmoji(emoticon="👀"),
+            reaction=types.ReactionEmoji(emoticon="✍️"),
             add_to_recent=False
         ))
 

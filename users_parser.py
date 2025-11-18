@@ -78,16 +78,61 @@ async def json_input(filename: str, proxy):
         return None
 
 
-async def get_group_users(client, name, group_link: str, max_batches: int = 10):
+async def get_group_users_by_messages(client, name, group_link: str, max_batches: int = 5):
+
     try:
         entity = await client.get_entity(group_link)
 
+        print(f"{Fore.WHITE}[INFO]{Fore.RESET} {name} Парсю участников по сообщениям из: {Fore.LIGHTBLUE_EX}{group_link}")
+        all_users = {}
+        offset_id = 0
+        limit = 100
+
+        for batch in range(max_batches):
+
+            history = await client(functions.messages.GetHistoryRequest(
+                peer=entity,
+                offset_id=offset_id,
+                offset_date=None,
+                add_offset=0,
+                limit=limit,
+                max_id=0,
+                min_id=0,
+                hash=0
+            ))
+            messages = history.messages
+            users = history.users
+
+            if not messages:
+                print(f"{Fore.YELLOW}[END]{Fore.RESET} История закончилась.")
+                break
+            for u in users:
+                all_users[u.id] = u
+            offset_id = messages[-1].id
+
+            print(
+                f"{Fore.WHITE}[BATCH]{Fore.RESET} {name} — пакет #{batch+1}: "
+                f"получено {Fore.LIGHTBLUE_EX}{len(messages)}{Fore.RESET} сообщений, "
+                f"{Fore.LIGHTBLUE_EX}{len(users)}{Fore.RESET} пользователей"
+            )
+            if len(messages) < limit:
+                break
+        result = list(all_users.values())
+        print(f"{Fore.GREEN}[SUCCESS]{Fore.RESET} Всего найдено уникальных участников по сообщениям: {Fore.LIGHTBLUE_EX}{len(result)}{Fore.RESET}")
+        return result
+    except Exception as e:
+        print(f"{Fore.RED}[ERROR]{Fore.RESET} Ошибка при парсинге по сообщениям: {e}")
+        return []
+
+
+
+async def get_group_users(client, name, group_link: str, max_batches: int = 10):
+    try:
+        entity = await client.get_entity(group_link)
         print(f"{Fore.WHITE}[INFO]{Fore.RESET} {name} Получаю участников из: {Fore.LIGHTBLUE_EX}{group_link}")
-
         all_users_by_id = {}
-        offset = 2400
-        limit = 200  # максимум, который имеет смысл просить у Telegram
-
+        offset = 0
+        limit = 200
         for batch in range(max_batches):
             result = await client(functions.channels.GetParticipantsRequest(
                 channel=entity,
@@ -96,38 +141,24 @@ async def get_group_users(client, name, group_link: str, max_batches: int = 10):
                 limit=limit,
                 hash=0
             ))
-
             users_batch = result.users
             participants_batch = result.participants
-
             if not users_batch:
-                # больше никого не отдали — выходим
                 break
-
-            # добавляем пользователей без дублей по id
             for u in users_batch:
                 all_users_by_id[u.id] = u
-
             print(
                 f"{Fore.WHITE}[BATCH]{Fore.RESET} {name} — пакет #{batch + 1}: "
                 f"получено {Fore.LIGHTBLUE_EX}{len(users_batch)}{Fore.RESET} пользователей "
                 f"(offset={offset})"
             )
-
-            # если вернули меньше, чем просили — дальше уже нечего запрашивать
             if len(participants_batch) < limit:
                 break
-
-            # сдвигаем окно на следующие 200
             offset += limit
 
         users = list(all_users_by_id.values())
-        print(
-            f"{Fore.GREEN}[SUCCESS]{Fore.RESET} Итогово загружено пользователей: "
-            f"{Fore.LIGHTBLUE_EX}{len(users)}{Fore.RESET}"
-        )
+        print(f"{Fore.GREEN}[SUCCESS]{Fore.RESET} Итогово загружено пользователей: {Fore.LIGHTBLUE_EX}{len(users)}{Fore.RESET}")
         return users
-
     except Exception as e:
         print(f"{Fore.RED}[ERROR]{Fore.RESET} Не удалось получить участников: {e}")
         return []
@@ -137,48 +168,35 @@ async def get_group_users(client, name, group_link: str, max_batches: int = 10):
 
 def filter_premium_users(users_list):
     premium_users = []
-
     for user in users_list:
         if getattr(user, "premium", False):
             premium_users.append(user)
-
     print(f"{Fore.GREEN}[FILTER]{Fore.RESET} Премиум-пользователей отсортировано: {Fore.LIGHTBLUE_EX}{len(premium_users)}{Fore.RESET}")
     return premium_users
 
 
 
 async def filter_users_with_stories(client, name, premium_users):
-    """
-    Точный вариант: проверяем сторис у каждого премиум-пользователя
-    через stories.GetPeerStoriesRequest, без GetAllStoriesRequest.
-
-    Между запросами — случайная задержка 3–5 секунд.
-    """
-
-    print(
-        f"{Fore.WHITE}[CHECK]{Fore.RESET} Аккаунт: {Fore.GREEN}{name}{Fore.RESET} — "
-        f"проверяю сторис у премиум-пользователей (точная проверка)..."
-    )
+    print(f"{Fore.WHITE}[CHECK]{Fore.RESET} Аккаунт: {Fore.GREEN}{name}{Fore.RESET} — проверяю сторис у премиум-пользователей (точная проверка)...")
 
     good_users = []
+    stories_count = 0
+    bad_users = len(premium_users)
+    iterat = 0
 
     for user in premium_users:
         try:
-            # Точечный запрос сторис конкретного пользователя
+            iterat += 1
             result = await client(functions.stories.GetPeerStoriesRequest(
                 peer=user.id
             ))
 
-            # У результата есть поле stories, в котором тоже есть список stories
             if result.stories and result.stories.stories:
                 good_users.append(user)
-                print('+1 сторис')
-                try:
-                    print(user.username)
-                except Exception as e:
-                    print(f'error {e}')
+                stories_count += 1
+                print(f"{iterat}. {Fore.LIGHTBLUE_EX}[{stories_count}]{Fore.RESET} Пользователь: {Fore.LIGHTBLUE_EX}@{user.username}{Fore.RESET} Осталось пользователей: {Fore.LIGHTBLUE_EX}{bad_users - iterat}")
             else:
-                print('без сторис')
+                print(f"{iterat}. {Fore.WHITE}Аккаунт без истории{Fore.RESET} Осталось пользователей: {Fore.LIGHTBLUE_EX}{bad_users - iterat}")
 
         except FloodWaitError as e:
             print(
@@ -186,7 +204,6 @@ async def filter_users_with_stories(client, name, premium_users):
                 f"FloodWait на {e.seconds} секунд при проверке {user.id}"
             )
             await asyncio.sleep(e.seconds)
-            # после ожидания просто идём дальше к следующему user
             continue
 
         except Exception as e:
@@ -196,7 +213,7 @@ async def filter_users_with_stories(client, name, premium_users):
             )
 
         # Случайная задержка 3–5 секунд между запросами
-        await asyncio.sleep(random.randint(1, 3))
+        await asyncio.sleep(random.randint(3, 5))
 
     print(
         f"{Fore.GREEN}[SUCCESS]{Fore.RESET} Аккаунт: {Fore.GREEN}{name}{Fore.RESET} — "
@@ -208,7 +225,7 @@ async def filter_users_with_stories(client, name, premium_users):
 
 
 
-def save_usernames(users, filename="users.txt"):
+def save_usernames(users, filename="nft.txt"):
     count = 0
     with open(filename, "w", encoding="utf-8") as f:
         for user in users:
@@ -221,34 +238,28 @@ def save_usernames(users, filename="users.txt"):
 
 
 async def account_proceed(client, name, group):
-    users = await get_group_users(client, name, group)
+    key = int(input("Введите 1 для парсинга по сообщениям или 2 для парсинга по группе "))
+    if key == 1:
+        users = await get_group_users_by_messages(client, name, group)
+    else:
+        users = await get_group_users(client, name, group)
     premium_users = filter_premium_users(users)
     good_users = await filter_users_with_stories(client, name, premium_users)
     save_usernames(good_users)
 
 
-
-
-
-
 async def main():
     tasks = []
-
     with open(CONFIG_FILE, 'r', encoding="utf-8-sig") as f:
         data = json.load(f)
-
     proxy = load_proxy_settings()
-
     for number in data['numbers']:
         client = await json_input(f"{number}.json", proxy)
         if not client:
             continue
-
         me = await client.get_me()
         name = me.first_name
-
         group = input(f"Введите ссылку на группу для аккаунта {name}: ")
-
         tasks.append(account_proceed(client, name, group))
     await asyncio.gather(*tasks)
 
